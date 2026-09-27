@@ -54,6 +54,103 @@ export interface DashboardLayout {
   showUpcoming: boolean;
 }
 
+export type NavBarStyle = 'bottom-cupertino' | 'floating-dock' | 'top-header' | 'kiosk-minimal';
+export type FloorGridColumns = 1 | 2 | 3 | 4;
+export type LayoutDensity = 'compact' | 'comfortable' | 'spacious';
+export type LayoutPresetId =
+  | 'debonair-floor-default'
+  | 'executive-attainment'
+  | 'operator-tablet-kiosk'
+  | 'ie-engineering-focus'
+  | 'auditor-minimalist'
+  | 'custom';
+
+export interface AppPageTabConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+  order: number;
+  badge?: string;
+  iconName?: string;
+  allowedTiers?: string[];
+}
+
+export interface DashboardWidgetConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+  order: number;
+  columnSpan?: 'full' | 'half' | 'third';
+}
+
+export interface AppPageLayoutConfig {
+  version: string;
+  lastUpdated: string;
+  updatedBy: string;
+  presetId?: LayoutPresetId;
+  presetName?: string;
+  targetTier?: string; // 'all' or 'tier_0', 'tier_1', etc.
+  
+  // Navigation & Page Flow
+  defaultLandingTab: string; // 'overview' | 'line-data' | etc.
+  navBarStyle: NavBarStyle;
+  tabs: AppPageTabConfig[];
+  
+  // Dashboard Widget Matrix
+  dashboard: DashboardLayout;
+  dashboardWidgets?: DashboardWidgetConfig[];
+  floorGridColumns: FloorGridColumns;
+  floorCardStyle: 'card' | 'row' | 'compact-chip';
+  
+  // Visual & Ergonomics
+  brandColor: string; // hex color e.g. '#176f78'
+  fontScalePct: number; // 90, 100, 115
+  density: LayoutDensity;
+  showAnnouncementTicker: boolean;
+  tickerText?: string;
+  highContrastMode: boolean;
+  kioskLockEnabled: boolean;
+  kioskAllowedLine?: string;
+}
+
+export type UpdateCategory =
+  | 'layout_push'
+  | 'ota_hotfix'
+  | 'operational_directive'
+  | 'schema_migration'
+  | 'maintenance_advisory';
+
+export type UpdateSeverity = 'normal' | 'important' | 'mandatory';
+
+export type UpdateTargetScope =
+  | 'all_terminals'
+  | 'building_a'
+  | 'building_b'
+  | 'tier_1_2_managers'
+  | 'tier_3_4_operators';
+
+export interface SystemUpdatePush {
+  id: string;
+  version: string;
+  title: string;
+  category: UpdateCategory;
+  severity: UpdateSeverity;
+  targetScope: UpdateTargetScope;
+  releaseNotes: string[];
+  pushedAt: string;
+  pushedByEmail: string;
+  pushedByName: string;
+  status: 'active' | 'rolled_back' | 'delivered';
+  actionLabel?: string;
+  actionPayload?: {
+    layoutConfig?: Partial<AppPageLayoutConfig>;
+    reloadRequired?: boolean;
+    clearCache?: boolean;
+  };
+  acknowledgedCount?: number;
+  totalTerminalsTargeted?: number;
+}
+
 export interface SecurityAuditEntry {
   id: string;
   timestamp: string;
@@ -337,6 +434,50 @@ export interface Shift8hWorkingMinutesBalance {
 
 export type LineStatus = 'Active' | 'Maintenance' | 'Stopped';
 
+export interface LiveStationCycleTime {
+  stationId: string;
+  operationName: string;
+  operatorName: string;
+  observedCycleTimeSec: number;
+  standardCycleTimeSec: number;
+  pitchTimeSec: number;
+  status: 'optimal' | 'bottleneck' | 'starved';
+  lastLoggedAt: string;
+}
+
+export interface LiveWipStation {
+  stage: 'input_loading' | 'front_assembly' | 'back_assembly' | 'collar_cuff' | 'side_seam' | 'end_line_qco' | 'finishing_transfer';
+  label: string;
+  wipPcs: number;
+  bufferHours: number;
+  status: 'balanced' | 'surging' | 'critical_overflow' | 'starving';
+}
+
+export interface LiveLineTelemetry {
+  lastUpdated: string;
+  isLiveMonitoring: boolean;
+  // Live Cycle Time Metrics
+  averageCycleTimeSec: number;
+  targetCycleTimeSec: number; // calculated from takt/pitch or SMV
+  bottleneckCycleTimeSec: number;
+  pitchTimeSec: number;
+  cycleTimeStations: LiveStationCycleTime[];
+  // Live Production Rates
+  currentHourlyRatePcs: number; // Pieces produced in current hour
+  targetHourlyRatePcs: number; // Hourly target pace
+  runRatePcsPerHour: number; // Instantaneous pacing extrapolated
+  pacingVariancePcs: number; // Current pacing vs target pace
+  pacingStatus: 'ahead' | 'on_pace' | 'behind' | 'critical_lag';
+  // Live WIP Levels
+  currentWipTotalPcs: number; // Live current WIP on the line
+  standardWipBufferPcs: number; // Ideal buffer e.g. 1.5 - 2 hrs production
+  wipBufferHours: number; // WIP / hourly rate
+  wipHealthStatus: 'lean_optimal' | 'buffer_safe' | 'high_accumulation' | 'starvation_risk';
+  wipStations: LiveWipStation[];
+  // Quick Floor Observation Notes
+  telemetryNotes?: string;
+}
+
 export interface LineEntry {
   id: number;
   date: string; // YYYY-MM-DD
@@ -377,6 +518,7 @@ export interface LineEntry {
   teamMembers?: LineTeamMember[];
   machineCount?: number;
   shift8hBalancing?: Shift8hWorkingMinutesBalance;
+  liveTelemetry?: LiveLineTelemetry;
 }
 
 export type ChecklistStatus = 'yes' | 'no' | 'pending';

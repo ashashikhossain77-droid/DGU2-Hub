@@ -30,7 +30,8 @@ import {
   SecurityAuditEntry,
   FactoryIndustryProfile,
   UserDailyBackupSettings,
-  DailyBackupRecord
+  DailyBackupRecord,
+  AppPageLayoutConfig
 } from './types';
 import {
   DEFAULT_DAILY_BACKUP_SETTINGS,
@@ -39,6 +40,8 @@ import {
   pruneOldBackups,
   AppBackupState
 } from './utils/indexedDbBackup';
+import { getStoredAppPageLayout, applyLayoutStyling } from './utils/layoutManager';
+import { SystemUpdateReceiver } from './components/SystemUpdateReceiver';
 import {
   getStoredActiveFactory,
   setStoredActiveFactory,
@@ -146,7 +149,15 @@ export default function App() {
   const todayStr = getTodayDateStr();
 
   // Navigation State
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'datas' || tab === 'data' || tab === 'linedata' || tab === 'lines') return 'settings';
+      if (tab) return tab;
+    } catch {}
+    return 'dashboard';
+  });
   const [selectedLineNo, setSelectedLineNo] = useState<string>('18');
   const [selectedChecklistDate, setSelectedChecklistDate] = useState<string>(DEBONAIR_SEPTEMBER_24_DATE);
   const [activeDate, setActiveDate] = useState<string>(DEBONAIR_SEPTEMBER_24_DATE);
@@ -157,7 +168,16 @@ export default function App() {
   const [lineDataSubTab, setLineDataSubTab] = useState<LineDataSubTab>('lines');
   const [checklistSubTab, setChecklistSubTab] = useState<ChecklistSubTab>('daily-checklist');
   const [leanToolsSubTab, setLeanToolsSubTab] = useState<LeanToolsSubTab>('toolkit');
-  const [settingsSection, setSettingsSection] = useState<SettingsPageSection>('control-center');
+  const [settingsSection, setSettingsSection] = useState<SettingsPageSection>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'datas' || tab === 'data' || tab === 'linedata' || tab === 'lines') return 'line-data';
+      if (tab === 'checklist') return 'checklist';
+      if (tab === 'lean-tools' || tab === 'lean') return 'lean-tools';
+    } catch {}
+    return 'control-center';
+  });
 
   // DCS Interactive Data State
   const [stations, setStations] = useState<StationData[]>(INITIAL_STATIONS);
@@ -317,6 +337,22 @@ export default function App() {
       return DEFAULT_DASHBOARD_LAYOUT;
     }
   });
+
+  const [appPageLayout, setAppPageLayout] = useState<AppPageLayoutConfig>(() => getStoredAppPageLayout());
+
+  useEffect(() => {
+    applyLayoutStyling(appPageLayout);
+    const handler = (e: any) => {
+      if (e.detail) {
+        setAppPageLayout(e.detail);
+        if (e.detail.dashboard) {
+          setLayout(e.detail.dashboard);
+        }
+      }
+    };
+    window.addEventListener('debonair:layout_changed', handler);
+    return () => window.removeEventListener('debonair:layout_changed', handler);
+  }, []);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
@@ -1640,8 +1676,8 @@ export default function App() {
       return;
     }
 
-    // 2. Line Data Operations Hub (In Settings)
-    if (tab === 'linedata' || tab === 'lines' || tab === 'line-data') {
+    // 2. Datas Operations Hub (Daily Data Collection)
+    if (tab === 'datas' || tab === 'data' || tab === 'linedata' || tab === 'lines' || tab === 'line-data') {
       setLineDataSubTab('lines');
       setSettingsSection('line-data');
       setCurrentTab('settings');
@@ -1810,6 +1846,30 @@ export default function App() {
         transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
         className="flex-1 flex flex-col w-full"
       >
+        {/* System Update Receiver (Live OTA Banner / Mandatory Modal) */}
+        <SystemUpdateReceiver
+          onLayoutApplied={(newLayout) => {
+            setAppPageLayout(newLayout);
+            if (newLayout.dashboard) setLayout(newLayout.dashboard);
+          }}
+        />
+
+        {/* Live Announcement Marquee Ticker if configured in App Page Layout */}
+        {appPageLayout.showAnnouncementTicker && (
+          <div
+            className="w-full px-4 py-1.5 text-xs font-bold text-white flex items-center justify-between shrink-0 shadow-xs"
+            style={{ backgroundColor: appPageLayout.brandColor || '#176f78' }}
+          >
+            <div className="flex items-center gap-2 overflow-hidden truncate">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
+              <span className="truncate">{appPageLayout.tickerText || 'Debonair Unit-02 • 34 Active Sewing Lines • Standard Shift Running'}</span>
+            </div>
+            <span className="text-[10px] font-mono opacity-80 uppercase shrink-0 pl-2">
+              DISPATCH
+            </span>
+          </div>
+        )}
+
         {/* Top Application Header */}
         <Header
         theme={theme}
@@ -1882,8 +1942,8 @@ export default function App() {
             />
           )}
 
-          {/* Unified Settings Section (Hosting Line Data Operations Hub, Check List Compliance Hub, Lean Tools, Reports & Analytics, World WCM, Control Center & Preferences) */}
-          {(currentTab === 'settings' || currentTab === 'linedata' || currentTab === 'checklist' || currentTab === 'lean-tools' || currentTab === 'world' || currentTab === 'reports') && (
+          {/* Unified Settings Section (Hosting Datas Operations Hub, Check List Compliance Hub, Lean Tools, Reports & Analytics, World WCM, Control Center & Preferences) */}
+          {(currentTab === 'settings' || currentTab === 'datas' || currentTab === 'data' || currentTab === 'linedata' || currentTab === 'checklist' || currentTab === 'lean-tools' || currentTab === 'world' || currentTab === 'reports') && (
             <SettingsControlCenterPage
               profile={profile}
               onUpdateProfile={(updated) => setProfile(prev => ({ ...prev, ...updated }))}
@@ -2005,6 +2065,7 @@ export default function App() {
         onOpenAndroidPackage={() => setIsAndroidPackageModalOpen(true)}
         onOpenAuth={() => setIsAuthPageOpen(true)}
         profile={profile}
+        navBarStyle={appPageLayout.navBarStyle}
       />
 
       {/* Modals - Lazy-loaded on-demand for lightning fast boot */}
@@ -2053,7 +2114,7 @@ export default function App() {
             pendingTodosCount={pendingTodosCount}
             unreadNotificationsCount={unreadNotificationsCount}
             scorecardScore={scorecardResult.overallScore}
-            linesCount={lines.length}
+            linesCount={currentDayLines.length}
             profile={profile}
             onOpenNotifications={() => setIsNotificationsOpen(true)}
             onOpenChat={() => setIsChatOpen(true)}
@@ -2173,7 +2234,7 @@ export default function App() {
                   Floor Status Snapshot
                 </h4>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Unit-02 Live Telemetry • {lines.length} Lines Monitored
+                  Unit-02 Live Telemetry • {currentDayLines.length} Lines Monitored
                 </span>
               </div>
             </div>
